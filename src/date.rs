@@ -1,6 +1,5 @@
 use chrono::{DateTime, Utc};
 use chrono_tz::{Asia::Tokyo, Tz};
-use tracing::debug;
 
 ///
 /// get the difference between the current time and the given date

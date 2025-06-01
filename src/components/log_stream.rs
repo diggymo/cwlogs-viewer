@@ -33,7 +33,7 @@ impl LogStream {
                 return Some(message);
             }
         }
-        return None;
+        None
     }
 }
 
@@ -47,26 +47,23 @@ impl Component for LogStream {
     }
 
     fn update(&mut self, action: Action, tx: UnboundedSender<Action>) -> Result<()> {
-        match action {
-            Action::ComponentAction(action) => {
-                if let Some(action) = action
-                    .as_any()
-                    .downcast_ref::<outer_layout::ReceiveNewLog>()
-                {
-                    let is_follow_log = self.is_follow_log();
+        if let Action::ComponentAction(action) = action {
+            if let Some(action) = action
+                .as_any()
+                .downcast_ref::<outer_layout::ReceiveNewLog>()
+            {
+                let is_follow_log = self.is_follow_log();
 
-                    self.received_logs.extend(action.new_messages.clone());
-                    if self.received_logs.len() > 1000 {
-                        self.received_logs
-                            .drain(0..(self.received_logs.len() - 1000));
-                    }
+                self.received_logs.extend(action.new_messages.clone());
+                if self.received_logs.len() > 1000 {
+                    self.received_logs
+                        .drain(0..(self.received_logs.len() - 1000));
+                }
 
-                    if is_follow_log {
-                        self.table_state.select_last();
-                    }
+                if is_follow_log {
+                    self.table_state.select_last();
                 }
             }
-            _ => {}
         }
         Ok(())
     }
@@ -81,7 +78,7 @@ impl Component for LogStream {
                 if let Some(selected_index) = self.table_state.selected() {
                     let selected_log = self.received_logs.get(selected_index);
                     if let Some(log) = selected_log {
-                        if self.saved_logs.iter().find(|&x| x.id == log.id).is_some() {
+                        if self.saved_logs.iter().any(|x| x.id == log.id) {
                             self.saved_logs.retain(|x| x.id != log.id);
                         } else {
                             self.saved_logs.push(log.clone());
@@ -121,7 +118,7 @@ impl Component for LogStream {
             .received_logs
             .iter()
             .map(|message| {
-                let is_highlighted = self.saved_logs.contains(&message);
+                let is_highlighted = self.saved_logs.contains(message);
                 Row::new(vec![get_diff(message.datetime), message.content.clone()]).style(
                     if is_highlighted {
                         Style::new().bg(Color::Yellow)

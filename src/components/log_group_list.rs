@@ -1,12 +1,9 @@
-use std::{
-    collections::HashSet,
-    time::{Instant, SystemTime},
-};
+use std::collections::HashSet;
 
 use chrono::{DateTime, Utc};
 use chrono_tz::{Asia::Tokyo, Tz};
 use color_eyre::Result;
-use ratatui::{prelude::*, symbols::bar::Set, widgets::*};
+use ratatui::{prelude::*, widgets::*};
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::debug;
 
@@ -218,7 +215,7 @@ impl Component for LogGroupList {
 
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> Result<()> {
         let rows = self.log_groups.iter().enumerate().map(|(i, log_group)| {
-            let text = format!("{}", log_group.name);
+            let text = log_group.name.to_string();
             let is_highlighted = self.selected_log_groups.contains(&i);
             Row::new(vec![get_diff(log_group.creation_time), text]).style(if is_highlighted {
                 Style::new().bg(Color::Yellow)

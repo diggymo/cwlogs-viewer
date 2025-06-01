@@ -1,10 +1,8 @@
-use std::collections::VecDeque;
 
-use aws_sdk_cloudwatchlogs::operation::start_live_tail;
-use chrono::{DateTime, Local, Utc};
-use chrono_tz::{Asia::Tokyo, Tz};
-use color_eyre::{Result, owo_colors::OwoColorize};
-use ratatui::{prelude::*, widgets::*};
+use chrono::DateTime;
+use chrono_tz::Tz;
+use color_eyre::Result;
+use ratatui::prelude::*;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
@@ -34,13 +32,13 @@ impl Message {
             .replace(ACCOUNT_ID, "")
             .replace(":", "");
 
-        return format!(
+        format!(
             "https://{}.console.aws.amazon.com/cloudwatch/home?region={}#logsV2:log-groups/log-group/{}/log-events/{}",
             AWS_REGION,
             AWS_REGION,
             urlencoding::encode(&urlencoding::encode(&log_group_id_without_account)),
             urlencoding::encode(&urlencoding::encode(log_stream_name))
-        );
+        )
     }
 }
 
@@ -93,7 +91,7 @@ impl OuterLayout {
         &mut self,
         log_group_arn_list: Vec<String>,
         tx: UnboundedSender<Action>,
-    ) -> () {
+    ) {
         // 既存のlive tailがあれば停止
         self.stop_live_tail();
 
@@ -136,7 +134,7 @@ impl OuterLayout {
                                     .unwrap()
                                     .iter()
                                     .map(|session_result| {
-                                        return Message {
+                                        Message {
                                             id: Ulid::new(),
                                             content: session_result.message.as_ref().unwrap().to_string(),
                                             datetime: DateTime::from_timestamp_millis(
@@ -148,7 +146,7 @@ impl OuterLayout {
                                                 session_result.log_group_identifier.as_ref().unwrap(),
                                                 session_result.log_stream_name.as_ref().unwrap(),
                                             ),
-                                        };
+                                        }
                                     })
                                     .collect::<Vec<_>>();
                                 if new_messages.is_empty() {
@@ -212,25 +210,22 @@ impl Component for OuterLayout {
         self.log_group_list.update(action.clone(), tx.clone())?;
         self.log_stream.update(action.clone(), tx.clone())?;
 
-        match action {
-            Action::ComponentAction(action) => {
-                if let Some(action) = action
-                    .as_any()
-                    .downcast_ref::<log_group_list::SelectLogGroup>()
-                {
-                    debug!("Log group list updated with {:?} items", &action);
-                    self.start_live_tail(
-                        action
-                            .log_groups
-                            .clone()
-                            .into_iter()
-                            .map(|lg| lg.arn)
-                            .collect(),
-                        tx,
-                    );
-                }
+        if let Action::ComponentAction(action) = action {
+            if let Some(action) = action
+                .as_any()
+                .downcast_ref::<log_group_list::SelectLogGroup>()
+            {
+                debug!("Log group list updated with {:?} items", &action);
+                self.start_live_tail(
+                    action
+                        .log_groups
+                        .clone()
+                        .into_iter()
+                        .map(|lg| lg.arn)
+                        .collect(),
+                    tx,
+                );
             }
-            _ => {}
         }
         Ok(())
     }
