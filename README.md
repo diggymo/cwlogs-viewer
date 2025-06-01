@@ -1,9 +1,12 @@
 # cwlogs-viewer
 
-[![CI](https://github.com//cwlogs-viewer/workflows/CI/badge.svg)](https://github.com//cwlogs-viewer/actions)
+Amazon CWLogsをLiveTrailでいい感じに表示するやつ
 
+## Demo
 
-## 
+![](./cwlog-view.gif)
+
+## Installation
 
 ```
 export CWLOGS_VIEWER_LOG_LEVEL=debug
