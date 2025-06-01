@@ -7,7 +7,7 @@ use tracing::{debug, info};
 
 use crate::{
     action::Action,
-    components::{Component, fps::FpsCounter, home::Home},
+    components::{Component, outer_layout::OuterLayout},
     config::Config,
     tui::{Event, Tui},
 };
@@ -37,7 +37,7 @@ impl App {
         Ok(Self {
             tick_rate,
             frame_rate,
-            components: vec![Box::new(Home::new()), Box::new(FpsCounter::default())],
+            components: vec![Box::new(OuterLayout::new())],
             should_quit: false,
             should_suspend: false,
             config: Config::new()?,
@@ -98,9 +98,7 @@ impl App {
             _ => {}
         }
         for component in self.components.iter_mut() {
-            if let Some(action) = component.handle_events(Some(event.clone()))? {
-                action_tx.send(action)?;
-            }
+            component.handle_events(Some(event.clone()), action_tx.clone())?;
         }
         Ok(())
     }
@@ -148,9 +146,7 @@ impl App {
                 _ => {}
             }
             for component in self.components.iter_mut() {
-                if let Some(action) = component.update(action.clone())? {
-                    self.action_tx.send(action)?
-                };
+                component.update(action.clone(), self.action_tx.clone())?;
             }
         }
         Ok(())

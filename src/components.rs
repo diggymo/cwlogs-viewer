@@ -8,8 +8,11 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{action::Action, config::Config, tui::Event};
 
-pub mod fps;
-pub mod home;
+// pub mod fps;
+pub mod log_group_list;
+pub mod log_stream;
+pub mod outer_layout;
+// pub mod home;
 
 /// `Component` is a trait that represents a visual and interactive element of the user interface.
 ///
@@ -64,13 +67,12 @@ pub trait Component {
     /// # Returns
     ///
     /// * `Result<Option<Action>>` - An action to be processed or none.
-    fn handle_events(&mut self, event: Option<Event>) -> Result<Option<Action>> {
-        let action = match event {
-            Some(Event::Key(key_event)) => self.handle_key_event(key_event)?,
-            Some(Event::Mouse(mouse_event)) => self.handle_mouse_event(mouse_event)?,
-            _ => None,
-        };
-        Ok(action)
+    fn handle_events(&mut self, event: Option<Event>, tx: UnboundedSender<Action>) -> Result<()> {
+        match event {
+            Some(Event::Key(key_event)) => self.handle_key_event(key_event, tx),
+            Some(Event::Mouse(mouse_event)) => self.handle_mouse_event(mouse_event, tx),
+            _ => Ok(()),
+        }
     }
     /// Handle key events and produce actions if necessary.
     ///
@@ -81,9 +83,10 @@ pub trait Component {
     /// # Returns
     ///
     /// * `Result<Option<Action>>` - An action to be processed or none.
-    fn handle_key_event(&mut self, key: KeyEvent) -> Result<Option<Action>> {
+    fn handle_key_event(&mut self, key: KeyEvent, tx: UnboundedSender<Action>) -> Result<()> {
         let _ = key; // to appease clippy
-        Ok(None)
+        let _ = tx; // to appease clippy
+        Ok(())
     }
     /// Handle mouse events and produce actions if necessary.
     ///
@@ -94,9 +97,10 @@ pub trait Component {
     /// # Returns
     ///
     /// * `Result<Option<Action>>` - An action to be processed or none.
-    fn handle_mouse_event(&mut self, mouse: MouseEvent) -> Result<Option<Action>> {
+    fn handle_mouse_event(&mut self, mouse: MouseEvent, tx: UnboundedSender<Action>) -> Result<()> {
         let _ = mouse; // to appease clippy
-        Ok(None)
+        let _ = tx;
+        Ok(())
     }
     /// Update the state of the component based on a received action. (REQUIRED)
     ///
@@ -107,9 +111,9 @@ pub trait Component {
     /// # Returns
     ///
     /// * `Result<Option<Action>>` - An action to be processed or none.
-    fn update(&mut self, action: Action) -> Result<Option<Action>> {
+    fn update(&mut self, action: Action, tx: UnboundedSender<Action>) -> Result<()> {
         let _ = action; // to appease clippy
-        Ok(None)
+        Ok(())
     }
     /// Render the component on the screen. (REQUIRED)
     ///

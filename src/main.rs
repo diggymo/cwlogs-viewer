@@ -9,6 +9,7 @@ mod app;
 mod cli;
 mod components;
 mod config;
+mod date;
 mod errors;
 mod logging;
 mod tui;
