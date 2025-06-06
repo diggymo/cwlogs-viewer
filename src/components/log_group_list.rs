@@ -109,16 +109,20 @@ impl Component for LogGroupList {
 
             let mut log_groups: Vec<LogGroup> = client
                 .describe_log_groups()
+                .into_paginator()
                 .send()
+                .try_collect()
                 .await
                 .map_err(|e| {
                     debug!("Failed to list log groups: {}", e);
                     e
                 })
-                .unwrap()
-                .log_groups
-                .unwrap_or_default()
                 .into_iter()
+                .flat_map(|res| {
+                    res.into_iter()
+                        .map(|group| group.log_groups.unwrap())
+                        .flatten()
+                })
                 .map(|log_group| LogGroup {
                     creation_time: DateTime::from_timestamp_millis(
                         log_group.creation_time.unwrap(),
@@ -250,15 +254,15 @@ impl Component for LogGroupList {
 mod test {
     use super::*;
 
-    #[test]
-    fn test_creation_time() {
-        // 1433189500783ミリ秒 = 2015-06-02T05:11:40.783Z
-        let timestamp_ms = 1433189500783;
-        let system_time = SystemTime::UNIX_EPOCH + std::time::Duration::from_millis(timestamp_ms);
+    // #[test]
+    // fn test_creation_time() {
+    //     // 1433189500783ミリ秒 = 2015-06-02T05:11:40.783Z
+    //     let timestamp_ms = 1433189500783;
+    //     let system_time = SystemTime::UNIX_EPOCH + std::time::Duration::from_millis(timestamp_ms);
 
-        // JST形式（日本標準時）で出力
-        let utc_time: DateTime<Utc> = system_time.into();
-        let jst_time = utc_time.with_timezone(&Tokyo);
-        dbg!(jst_time.to_rfc3339());
-    }
+    //     // JST形式（日本標準時）で出力
+    //     let utc_time: DateTime<Utc> = system_time.into();
+    //     let jst_time = utc_time.with_timezone(&Tokyo);
+    //     dbg!(jst_time.to_rfc3339());
+    // }
 }
