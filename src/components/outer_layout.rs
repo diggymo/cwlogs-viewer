@@ -1,4 +1,3 @@
-
 use chrono::DateTime;
 use chrono_tz::Tz;
 use color_eyre::Result;
@@ -94,6 +93,10 @@ impl OuterLayout {
     ) {
         // 既存のlive tailがあれば停止
         self.stop_live_tail();
+
+        if log_group_arn_list.is_empty() {
+            return;
+        }
 
         // 新しいキャンセレーショントークンを作成
         let cancel_token = CancellationToken::new();
