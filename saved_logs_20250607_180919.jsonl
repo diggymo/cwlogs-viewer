@@ -1,0 +1,9 @@
+bye from 1749286466
+{"message": {"hello from cli": "value", "obj1":{"obj1-1": {"obj1-1-1": "hello from cli","obj1-1-2": true}}}, "otherProps": "hoge","otherProps2": "hoge","otherProps3": "hoge", "bool": true, "number": 123214812151421 }
+{"message": {"hello from cli": "value", "obj1":{"obj1-1": {"obj1-1-1": "hello from cli","obj1-1-2": true}}}, "otherProps": "hoge","otherProps2": "hoge","otherProps3": "hoge", "bool": true, "number": 123214812151421 }
+{"message": {"hello from cli": "value", "obj1":{"obj1-1": {"obj1-1-1": "hello from cli","obj1-1-2": true}}}, "otherProps": "hoge","otherProps2": "hoge","otherProps3": "hoge", "bool": true, "number": 123214812151421 }
+{"message": {"hello from cli": "value", "obj1":{"obj1-1": {"obj1-1-1": "hello from cli","obj1-1-2": true}}}, "otherProps": "hoge","otherProps2": "hoge","otherProps3": "hoge", "bool": true, "number": 123214812151421 }
+bye from 1749286512
+hello from 1749286512
+{"message": {"hello from cli": "value", "obj1":{"obj1-1": {"obj1-1-1": "hello from cli","obj1-1-2": true}}}, "otherProps": "hoge","otherProps2": "hoge","otherProps3": "hoge", "bool": true, "number": 123214812151421 }
+{"message": {"hello from cli": "value", "obj1":{"obj1-1": {"obj1-1-1": "hello from cli","obj1-1-2": true}}}, "otherProps": "hoge","otherProps2": "hoge","otherProps3": "hoge", "bool": true, "number": 123214812151421 }

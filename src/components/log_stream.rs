@@ -1,5 +1,10 @@
 use std::collections::VecDeque;
+use std::fs::File;
+use std::io::Write;
+use std::time::{Duration, Instant};
 
+use chrono::Utc;
+use chrono_tz::Asia::Tokyo;
 use color_eyre::Result;
 use ratatui::{prelude::*, widgets::*};
 use serde_json::Value;
@@ -9,10 +14,32 @@ use super::{
     Component,
     outer_layout::{self, Message},
 };
+use crate::action::ComponentAction;
+use crate::notification::show_notification;
 use crate::{action::Action, config::Config, date::get_diff};
 use arboard::Clipboard;
 
-#[derive(Default, Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
+struct ExportLogs {
+    filepath: String,
+}
+
+impl ComponentAction for ExportLogs {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn name(&self) -> &'static str {
+        "ExportLogs"
+    }
+
+    fn clone_box(&self) -> Box<dyn ComponentAction> {
+        Box::new(self.clone())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[derive(Default)]
 pub struct LogStream {
     /// max: 1000
     received_logs: VecDeque<Message>,
@@ -20,7 +47,10 @@ pub struct LogStream {
     table_state: TableState,
 
     saved_logs: Vec<Message>,
+
+    notification: Option<(String, Instant)>,
 }
+
 
 impl LogStream {
     fn is_follow_log(&self) -> bool {
@@ -35,6 +65,36 @@ impl LogStream {
             }
         }
         None
+    }
+
+    fn export_saved_logs(&mut self) -> Result<String> {
+        if self.saved_logs.is_empty() {
+            return Ok(String::new());
+        }
+
+        let now = Utc::now();
+        let filename = format!(
+            "saved_logs_{}.jsonl",
+            now.with_timezone(&Tokyo).format("%Y%m%d_%H%M%S")
+        );
+        let mut file = File::create(&filename)?;
+        for message in &self.saved_logs {
+            writeln!(file, "{}", message.content)?;
+        }
+
+        Ok(filename)
+    }
+
+    fn show_notification(&mut self, message: String) {
+        self.notification = Some((message, Instant::now()));
+    }
+
+    fn clear_expired_notification(&mut self) {
+        if let Some((_, created_at)) = &self.notification {
+            if created_at.elapsed() > Duration::from_secs(3) {
+                self.notification = None;
+            }
+        }
     }
 }
 
@@ -99,6 +159,18 @@ impl Component for LogStream {
                 if let Some(message) = self.get_selected_log() {
                     let mut clipboard = Clipboard::new().unwrap();
                     clipboard.set_text(message.url.clone()).unwrap();
+
+                    show_notification(
+                        "Copy URL",
+                        &format!("Copied URL to clipboard: {}", message.url),
+                    );
+                }
+            }
+            crossterm::event::KeyCode::Char('e') => {
+                if let Ok(path) = self.export_saved_logs() {
+                    show_notification("Log Export", &format!("Exported logs to {}", path));
+                } else {
+                    self.show_notification("Export failed".to_string());
                 }
             }
             _ => {}
@@ -108,11 +180,24 @@ impl Component for LogStream {
     }
 
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> Result<()> {
+        // Clear expired notifications
+        self.clear_expired_notification();
+
         // 縦方向のレイアウトを作成
+        let constraints = if self.notification.is_some() {
+            vec![
+                Constraint::Fill(1),
+                Constraint::Length(8),
+                Constraint::Length(3),
+            ]
+        } else {
+            vec![Constraint::Fill(1), Constraint::Length(8)]
+        };
+
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .flex(layout::Flex::Center)
-            .constraints([Constraint::Fill(1), Constraint::Length(8)])
+            .constraints(constraints)
             .split(area);
 
         let rows = self
@@ -162,6 +247,22 @@ impl Component for LogStream {
             );
         }
 
+        // Display notification if present
+        if let Some((notification_text, _)) = &self.notification {
+            let notification_chunk = if chunks.len() > 2 {
+                chunks[2]
+            } else {
+                chunks[1]
+            };
+            frame.render_widget(
+                Paragraph::new(notification_text.clone())
+                    .style(Style::default().bg(Color::Green).fg(Color::Black))
+                    .block(Block::bordered().title("Notification"))
+                    .alignment(Alignment::Center),
+                notification_chunk,
+            );
+        }
+
         Ok(())
     }
 }
@@ -185,7 +286,7 @@ fn convert_to_line(raw_text: String) -> Line<'static> {
 
     let mut spans = Vec::new();
     spans.push(Span::raw("{"));
-    
+
     for (key, value) in obj.iter() {
         spans.push(Span::raw(format!("\"{}\":", key)));
         if key == "message" {
@@ -256,7 +357,7 @@ fn format_value_with_colors(spans: &mut Vec<Span<'static>>, value: &Value, depth
 }
 #[cfg(test)]
 mod test {
-    
+
     use std::collections::VecDeque;
 
     use super::*;

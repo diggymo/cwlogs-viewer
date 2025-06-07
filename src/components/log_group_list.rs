@@ -174,10 +174,7 @@ impl Component for LogGroupList {
                     e
                 })
                 .into_iter()
-                .flat_map(|res| {
-                    res.into_iter()
-                        .flat_map(|group| group.log_groups.unwrap())
-                })
+                .flat_map(|res| res.into_iter().flat_map(|group| group.log_groups.unwrap()))
                 .map(|log_group| LogGroup {
                     creation_time: DateTime::from_timestamp_millis(
                         log_group.creation_time.unwrap(),
@@ -326,7 +323,6 @@ impl Component for LogGroupList {
 
 #[cfg(test)]
 mod test {
-    
 
     // #[test]
     // fn test_creation_time() {

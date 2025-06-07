@@ -2,6 +2,7 @@ use chrono::DateTime;
 use chrono_tz::Tz;
 use color_eyre::Result;
 use ratatui::prelude::*;
+use serde::{Serialize, Serializer};
 use tokio::sync::mpsc::UnboundedSender;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
@@ -23,6 +24,14 @@ pub struct Message {
     pub content: String,
     pub datetime: DateTime<Tz>,
     pub url: String,
+}
+impl Serialize for Message {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.content)
+    }
 }
 
 impl Message {
