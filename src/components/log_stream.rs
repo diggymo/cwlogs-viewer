@@ -2,6 +2,7 @@ use std::collections::VecDeque;
 
 use color_eyre::Result;
 use ratatui::{prelude::*, widgets::*};
+use serde_json::Value;
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::{
@@ -119,7 +120,8 @@ impl Component for LogStream {
             .iter()
             .map(|message| {
                 let is_highlighted = self.saved_logs.contains(message);
-                Row::new(vec![get_diff(message.datetime), message.content.clone()]).style(
+                let content_line = convert_to_line(message.content.clone());
+                Row::new(vec![Line::from(get_diff(message.datetime)), content_line]).style(
                     if is_highlighted {
                         Style::new().bg(Color::Yellow)
                     } else {
@@ -128,7 +130,8 @@ impl Component for LogStream {
                 )
             })
             .chain(std::iter::once(
-                Row::new(vec!["---", "Follow"]).style(Style::new().fg(Color::Gray)),
+                Row::new(vec![Line::from("---"), Line::from("Follow")])
+                    .style(Style::new().fg(Color::Gray)),
             ));
         let table = Table::new(
             rows,
@@ -150,8 +153,10 @@ impl Component for LogStream {
         );
 
         if let Some(message) = self.get_selected_log() {
+            let content_line = convert_to_line(message.content.clone());
             frame.render_widget(
-                Paragraph::new(message.content.clone())
+                Paragraph::new(content_line)
+                    .wrap(Wrap { trim: true })
                     .block(Block::bordered().title(format!("Log Detail | {}", message.datetime))),
                 chunks[1],
             );
@@ -161,9 +166,63 @@ impl Component for LogStream {
     }
 }
 
+fn convert_to_line(raw_text: String) -> Line<'static> {
+    let result: Result<Value, _> = serde_json::from_str(&raw_text);
+
+    if result.is_err() {
+        return Line::from(raw_text);
+    }
+
+    let value = result.unwrap();
+    if !value.is_object() {
+        return Line::from(raw_text);
+    }
+
+    let obj = value.as_object().unwrap();
+    if !obj.contains_key("message") {
+        return Line::from(raw_text);
+    }
+
+    // JSONを整形して表示し、messageプロパティのみ黄色にする
+    let mut spans = Vec::new();
+
+    // JSONを再構築してmessageプロパティを特別扱い
+    spans.push(Span::raw("{"));
+    for (key, value) in obj.iter() {
+        spans.push(Span::raw(format!("\"{}\":", key)));
+        if key == "message" {
+            // messageプロパティは黄色で表示
+            spans.push(Span::styled(
+                serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string()),
+                Style::default().fg(Color::LightRed),
+            ));
+        } else {
+            // その他のプロパティは通常の色で表示
+            spans.push(Span::raw(
+                serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string()),
+            ));
+        }
+
+        spans.push(Span::raw(","));
+    }
+
+    // 最後のカンマを削除
+    if let Some(last_span) = spans.last_mut() {
+        if last_span.content.ends_with(",") {
+            *last_span = Span::raw(last_span.content.trim_end_matches(",").to_string());
+        }
+    }
+
+    spans.push(Span::raw("}"));
+
+    Line::from(spans)
+}
 #[cfg(test)]
 mod test {
+    
     use std::collections::VecDeque;
+
+    use super::*;
 
     #[test]
     fn test_dequeue() {
@@ -186,5 +245,28 @@ mod test {
         assert_eq!(a.len(), 6);
         assert_eq!(a[0], 6);
         assert_eq!(a[1], 7);
+    }
+
+    #[test]
+    fn test_convert_to_line() {
+        let a = convert_to_line(r#"
+{
+    "cold_start": true,
+    "function_arn": "arn:aws:lambda:ap-northeast-1:XXXXXXXXXXXX:function:AwsAppStack-loggerE71C1604-7O0zP2rA8iBZ",
+    "function_memory_size": 128,
+    "function_name": "AwsAppStack-loggerE71C1604-7O0zP2rA8iBZ",
+    "function_request_id": "5c4e6be5-870f-487a-a0e8-bc05d44f1d9c",
+    "level": "INFO",
+    "message": "This is an INFO log with some context",
+    "service": "shopping-cart-api",
+    "timestamp": "2022-07-23T09:33:23.238Z",
+    "xray_trace_id": "1-62dbc062-2b65813062b227f4358eb9c1",
+    "event": {
+        "key1": "value1",
+        "key2": "value2",
+        "key3": "value3"
+    }
+}
+        "#.to_string());
     }
 }

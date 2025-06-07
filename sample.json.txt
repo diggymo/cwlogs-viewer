@@ -1,0 +1,17 @@
+{
+    \\\"cold_start\\\": true,
+    \\\"function_arn\\\": \\\"arn:aws:lambda:ap-northeast-1:XXXXXXXXXXXX:function:AwsAppStack-loggerE71C1604-7O0zP2rA8iBZ\\\",
+    \\\"function_memory_size\\\": 128,
+    \\\"function_name\\\": \\\"AwsAppStack-loggerE71C1604-7O0zP2rA8iBZ\\\",
+    \\\"function_request_id\\\": \\\"5c4e6be5-870f-487a-a0e8-bc05d44f1d9c\\\",
+    \\\"level\\\": \\\"INFO\\\",
+    \\\"message\\\": \\\"This is an INFO log with some context\\\",
+    \\\"service\\\": \\\"shopping-cart-api\\\",
+    \\\"timestamp\\\": \\\"2022-07-23T09:33:23.238Z\\\",
+    \\\"xray_trace_id\\\": \\\"1-62dbc062-2b65813062b227f4358eb9c1\\\",
+    \\\"event\\\": {
+        \\\"key1\\\": \\\"value1\\\",
+        \\\"key2\\\": \\\"value2\\\",
+        \\\"key3\\\": \\\"value3\\\"
+    }
+}

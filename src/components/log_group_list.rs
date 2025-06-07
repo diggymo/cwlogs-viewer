@@ -1,4 +1,6 @@
 use std::collections::HashSet;
+use std::env;
+use std::fs;
 
 use chrono::{DateTime, Utc};
 use chrono_tz::{Asia::Tokyo, Tz};
@@ -69,7 +71,7 @@ impl ComponentAction for SelectLogGroup {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct LogGroupList {
-    log_groups: Vec<LogGroup>,
+    loaded_log_groups: Vec<LogGroup>,
     table_state: TableState,
 
     selected_log_groups: HashSet<usize>,
@@ -92,9 +94,63 @@ impl Default for LogGroupList {
         });
 
         Self {
-            log_groups: logs,
+            loaded_log_groups: logs,
             selected_log_groups: HashSet::new(),
             table_state: TableState::default(),
+        }
+    }
+}
+
+impl LogGroupList {
+    fn save_selected_log_groups(&self) {
+        let temp_dir = env::temp_dir();
+        let filepath = temp_dir.join("cwlogs-viewer-selected-groups.txt");
+
+        let selected_names: Vec<String> = self
+            .selected_log_groups
+            .iter()
+            .filter_map(|&index| self.loaded_log_groups.get(index))
+            .map(|lg| lg.name.clone())
+            .collect();
+
+        let content = selected_names.join("\n");
+
+        if let Err(e) = fs::write(&filepath, content) {
+            debug!("Failed to save selected log groups: {}", e);
+        } else {
+            debug!(
+                "Saved {} selected log groups to {:?}",
+                selected_names.len(),
+                filepath
+            );
+        }
+    }
+
+    fn load_selected_log_groups(&mut self) {
+        let temp_dir = env::temp_dir();
+        let filepath = temp_dir.join("cwlogs-viewer-selected-groups.txt");
+
+        if let Ok(content) = fs::read_to_string(&filepath) {
+            let saved_names: HashSet<String> = content
+                .lines()
+                .filter(|line| !line.trim().is_empty())
+                .map(|line| line.to_string())
+                .collect();
+
+            self.selected_log_groups.clear();
+            for (index, log_group) in self.loaded_log_groups.iter().enumerate() {
+                if saved_names.contains(&log_group.name) {
+                    self.selected_log_groups.insert(index);
+                }
+            }
+
+            debug!(
+                "Loaded {} selected log groups from {:?}",
+                self.selected_log_groups.len(),
+                filepath
+            );
+        } else {
+            debug!("No saved selected log groups found at {:?}", filepath);
         }
     }
 }
@@ -120,8 +176,7 @@ impl Component for LogGroupList {
                 .into_iter()
                 .flat_map(|res| {
                     res.into_iter()
-                        .map(|group| group.log_groups.unwrap())
-                        .flatten()
+                        .flat_map(|group| group.log_groups.unwrap())
                 })
                 .map(|log_group| LogGroup {
                     creation_time: DateTime::from_timestamp_millis(
@@ -163,33 +218,30 @@ impl Component for LogGroupList {
         match key.code {
             crossterm::event::KeyCode::Up | crossterm::event::KeyCode::PageUp => {
                 self.table_state.scroll_up_by(1);
-                // if self.scroll_pos < self.log_groups.len().saturating_sub(1) {
-                //     self.scroll_pos = self.scroll_pos.saturating_add(1);
-                //     self.scroll_bar_state = self.scroll_bar_state.position(self.scroll_pos);
-                // }
             }
             crossterm::event::KeyCode::Down | crossterm::event::KeyCode::PageDown => {
                 self.table_state.scroll_down_by(1);
-                // if self.scroll_pos > 0 {
-                //     self.scroll_pos = self.scroll_pos.saturating_sub(1);
-                //     self.scroll_bar_state = self.scroll_bar_state.position(self.scroll_pos);
-                // }
             }
 
             crossterm::event::KeyCode::Enter => {
                 if let Some(selected_index) = self.table_state.selected() {
                     if self.selected_log_groups.contains(&selected_index) {
                         self.selected_log_groups.remove(&selected_index);
-                    } else {
+                    } else if self.selected_log_groups.len() < 10 {
                         self.selected_log_groups.insert(selected_index);
+                    } else {
+                        debug!("Cannot select more than 10 log groups");
+                        return Ok(());
                     }
 
                     // get selected log groups from self.log_groups
                     let selected_log_groups: Vec<LogGroup> = self
                         .selected_log_groups
                         .iter()
-                        .filter_map(|&index| self.log_groups.get(index).cloned())
+                        .filter_map(|&index| self.loaded_log_groups.get(index).cloned())
                         .collect();
+
+                    self.save_selected_log_groups();
 
                     tx.send(Action::ComponentAction(Box::new(SelectLogGroup {
                         log_groups: selected_log_groups,
@@ -208,8 +260,27 @@ impl Component for LogGroupList {
                 if let Some(fetch_action) =
                     component_action.as_any().downcast_ref::<FetchLogGroups>()
                 {
-                    self.log_groups = fetch_action.log_groups.clone();
-                    debug!("Updated log groups with {} items", self.log_groups.len());
+                    self.loaded_log_groups = fetch_action.log_groups.clone();
+                    debug!(
+                        "Updated log groups with {} items",
+                        self.loaded_log_groups.len()
+                    );
+
+                    self.load_selected_log_groups();
+
+                    if !self.selected_log_groups.is_empty() {
+                        let selected_log_groups: Vec<LogGroup> = self
+                            .selected_log_groups
+                            .iter()
+                            .filter_map(|&index| self.loaded_log_groups.get(index).cloned())
+                            .collect();
+
+                        if !selected_log_groups.is_empty() {
+                            tx.send(Action::ComponentAction(Box::new(SelectLogGroup {
+                                log_groups: selected_log_groups,
+                            })))?;
+                        }
+                    }
                 }
                 Ok(())
             }
@@ -218,23 +289,26 @@ impl Component for LogGroupList {
     }
 
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> Result<()> {
-        let rows = self.log_groups.iter().enumerate().map(|(i, log_group)| {
-            let text = log_group.name.to_string();
-            let is_highlighted = self.selected_log_groups.contains(&i);
-            Row::new(vec![get_diff(log_group.creation_time), text]).style(if is_highlighted {
-                Style::new().bg(Color::Yellow)
-            } else {
-                Style::new()
-            })
-        });
+        let rows = self
+            .loaded_log_groups
+            .iter()
+            .enumerate()
+            .map(|(i, log_group)| {
+                let text = log_group.name.to_string();
+                let is_highlighted = self.selected_log_groups.contains(&i);
+                Row::new(vec![get_diff(log_group.creation_time), text]).style(if is_highlighted {
+                    Style::new().bg(Color::Yellow)
+                } else {
+                    Style::new()
+                })
+            });
         let table = Table::new(
             rows,
             vec![Constraint::Length(3), Constraint::Percentage(100)],
         )
         .header(
-            Row::new(vec!["Cre", "Log Group"])
+            Row::new(vec!["Cre", "LogGroup"])
                 .style(Style::new().bold())
-                // To add space between the header and the rest of the rows, specify the margin
                 .bottom_margin(1),
         );
 
@@ -252,7 +326,7 @@ impl Component for LogGroupList {
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    
 
     // #[test]
     // fn test_creation_time() {

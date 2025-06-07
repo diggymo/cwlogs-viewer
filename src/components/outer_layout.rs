@@ -270,12 +270,12 @@ impl Component for OuterLayout {
             .split(area);
 
         // Log group listの高さを20に制限
-        let left_layout = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints(vec![Constraint::Length(20), Constraint::Min(0)])
-            .split(outer_layout[0]);
+        // let left_layout = Layout::default()
+        //     .direction(Direction::Vertical)
+        //     .constraints(vec![Constraint::Length(20), Constraint::Min(0)])
+        //     .split(outer_layout[0]);
 
-        self.log_group_list.draw(frame, left_layout[0])?;
+        self.log_group_list.draw(frame, outer_layout[0])?;
         self.log_stream.draw(frame, outer_layout[1])?;
         Ok(())
     }
