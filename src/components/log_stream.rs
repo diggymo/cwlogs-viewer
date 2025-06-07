@@ -183,26 +183,20 @@ fn convert_to_line(raw_text: String) -> Line<'static> {
         return Line::from(raw_text);
     }
 
-    // JSONを整形して表示し、messageプロパティのみ黄色にする
     let mut spans = Vec::new();
-
-    // JSONを再構築してmessageプロパティを特別扱い
     spans.push(Span::raw("{"));
+    
     for (key, value) in obj.iter() {
         spans.push(Span::raw(format!("\"{}\":", key)));
         if key == "message" {
-            // messageプロパティは黄色で表示
-            spans.push(Span::styled(
-                serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string()),
-                Style::default().fg(Color::LightRed),
-            ));
+            // messageプロパティは階層的に色付け
+            format_value_with_colors(&mut spans, value, 0);
         } else {
             // その他のプロパティは通常の色で表示
             spans.push(Span::raw(
                 serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string()),
             ));
         }
-
         spans.push(Span::raw(","));
     }
 
@@ -214,8 +208,51 @@ fn convert_to_line(raw_text: String) -> Line<'static> {
     }
 
     spans.push(Span::raw("}"));
-
     Line::from(spans)
+}
+
+fn format_value_with_colors(spans: &mut Vec<Span<'static>>, value: &Value, depth: usize) {
+    let colors = [
+        Color::LightRed,
+        Color::LightBlue,
+        Color::LightCyan,
+        Color::LightMagenta,
+        Color::LightGreen,
+    ];
+    let color = colors[depth % colors.len()];
+
+    match value {
+        Value::Object(obj) => {
+            spans.push(Span::styled("{", Style::default().fg(color)));
+            for (i, (key, val)) in obj.iter().enumerate() {
+                if i > 0 {
+                    spans.push(Span::styled(",", Style::default().fg(color)));
+                }
+                spans.push(Span::styled(
+                    format!("\"{}\":", key),
+                    Style::default().fg(color),
+                ));
+                format_value_with_colors(spans, val, depth + 1);
+            }
+            spans.push(Span::styled("}", Style::default().fg(color)));
+        }
+        Value::Array(arr) => {
+            spans.push(Span::styled("[", Style::default().fg(color)));
+            for (i, val) in arr.iter().enumerate() {
+                if i > 0 {
+                    spans.push(Span::styled(",", Style::default().fg(color)));
+                }
+                format_value_with_colors(spans, val, depth + 1);
+            }
+            spans.push(Span::styled("]", Style::default().fg(color)));
+        }
+        _ => {
+            spans.push(Span::styled(
+                serde_json::to_string(value).unwrap_or_else(|_| value.to_string()),
+                Style::default().fg(color),
+            ));
+        }
+    }
 }
 #[cfg(test)]
 mod test {
