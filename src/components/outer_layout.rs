@@ -36,9 +36,8 @@ impl Serialize for Message {
 
 impl Message {
     fn generate_url(log_group_identifier: &str, log_stream_name: &str) -> String {
-        let log_group_id_without_account = log_group_identifier
-            .replace(ACCOUNT_ID, "")
-            .replace(":", "");
+        // NOTE: アカウントID部分は除外
+        let log_group_id_without_account = &log_group_identifier[13..];
 
         format!(
             "https://{}.console.aws.amazon.com/cloudwatch/home?region={}#logsV2:log-groups/log-group/{}/log-events/{}",
@@ -51,7 +50,6 @@ impl Message {
 }
 
 const AWS_REGION: &str = "ap-northeast-1";
-const ACCOUNT_ID: &str = "153820248175";
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ReceiveNewLog {
