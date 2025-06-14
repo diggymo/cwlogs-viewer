@@ -12,6 +12,8 @@ Amazon CWLogsをLiveTrailでいい感じに表示するやつ
 
 ## Demo
 
+![](./cwlog-view.png)
+
 ![](./cwlog-view.gif)
 
 ### Export to file

@@ -1,7 +1,6 @@
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io::Write;
-use std::time::{Duration, Instant};
 
 use chrono::Utc;
 use chrono_tz::Asia::Tokyo;
@@ -39,7 +38,25 @@ impl ComponentAction for ExportLogs {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-#[derive(Default)]
+pub struct SelectLog {
+    pub selected_log: Message,
+}
+
+impl ComponentAction for SelectLog {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn name(&self) -> &'static str {
+        "SelectLog"
+    }
+
+    fn clone_box(&self) -> Box<dyn ComponentAction> {
+        Box::new(self.clone())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct LogStream {
     /// max: 1000
     received_logs: VecDeque<Message>,
@@ -47,10 +64,7 @@ pub struct LogStream {
     table_state: TableState,
 
     saved_logs: Vec<Message>,
-
-    notification: Option<(String, Instant)>,
 }
-
 
 impl LogStream {
     fn is_follow_log(&self) -> bool {
@@ -83,18 +97,6 @@ impl LogStream {
         }
 
         Ok(filename)
-    }
-
-    fn show_notification(&mut self, message: String) {
-        self.notification = Some((message, Instant::now()));
-    }
-
-    fn clear_expired_notification(&mut self) {
-        if let Some((_, created_at)) = &self.notification {
-            if created_at.elapsed() > Duration::from_secs(3) {
-                self.notification = None;
-            }
-        }
     }
 }
 
@@ -150,9 +152,19 @@ impl Component for LogStream {
 
             crossterm::event::KeyCode::Up | crossterm::event::KeyCode::PageUp => {
                 self.table_state.scroll_up_by(1);
+                if let Some(selected_log) = self.get_selected_log() {
+                    tx.send(Action::ComponentAction(Box::new(SelectLog {
+                        selected_log: selected_log.clone(),
+                    })))?;
+                }
             }
             crossterm::event::KeyCode::Down | crossterm::event::KeyCode::PageDown => {
                 self.table_state.scroll_down_by(1);
+                if let Some(selected_log) = self.get_selected_log() {
+                    tx.send(Action::ComponentAction(Box::new(SelectLog {
+                        selected_log: selected_log.clone(),
+                    })))?;
+                }
             }
 
             crossterm::event::KeyCode::Char('c') => {
@@ -170,7 +182,7 @@ impl Component for LogStream {
                 if let Ok(path) = self.export_saved_logs() {
                     show_notification("Log Export", &format!("Exported logs to {}", path));
                 } else {
-                    self.show_notification("Export failed".to_string());
+                    show_notification("Log Export", "Failed to export logs.");
                 }
             }
             _ => {}
@@ -180,32 +192,12 @@ impl Component for LogStream {
     }
 
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> Result<()> {
-        // Clear expired notifications
-        self.clear_expired_notification();
-
-        // 縦方向のレイアウトを作成
-        let constraints = if self.notification.is_some() {
-            vec![
-                Constraint::Fill(1),
-                Constraint::Length(8),
-                Constraint::Length(3),
-            ]
-        } else {
-            vec![Constraint::Fill(1), Constraint::Length(8)]
-        };
-
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .flex(layout::Flex::Center)
-            .constraints(constraints)
-            .split(area);
-
         let rows = self
             .received_logs
             .iter()
             .map(|message| {
                 let is_highlighted = self.saved_logs.contains(message);
-                let content_line = convert_to_line(message.content.clone());
+                let content_line = convert_to_line(&message.content);
                 Row::new(vec![Line::from(get_diff(message.datetime)), content_line]).style(
                     if is_highlighted {
                         Style::new().bg(Color::Yellow)
@@ -233,55 +225,28 @@ impl Component for LogStream {
                 .row_highlight_style(Style::new().reversed())
                 .highlight_symbol(">")
                 .block(Block::bordered().title("Log Stream")),
-            chunks[0],
+            area,
             &mut self.table_state,
         );
-
-        if let Some(message) = self.get_selected_log() {
-            let content_line = convert_to_line(message.content.clone());
-            frame.render_widget(
-                Paragraph::new(content_line)
-                    .wrap(Wrap { trim: true })
-                    .block(Block::bordered().title(format!("Log Detail | {}", message.datetime))),
-                chunks[1],
-            );
-        }
-
-        // Display notification if present
-        if let Some((notification_text, _)) = &self.notification {
-            let notification_chunk = if chunks.len() > 2 {
-                chunks[2]
-            } else {
-                chunks[1]
-            };
-            frame.render_widget(
-                Paragraph::new(notification_text.clone())
-                    .style(Style::default().bg(Color::Green).fg(Color::Black))
-                    .block(Block::bordered().title("Notification"))
-                    .alignment(Alignment::Center),
-                notification_chunk,
-            );
-        }
-
         Ok(())
     }
 }
 
-fn convert_to_line(raw_text: String) -> Line<'static> {
-    let result: Result<Value, _> = serde_json::from_str(&raw_text);
+pub fn convert_to_line(raw_text: &str) -> Line<'static> {
+    let result: Result<Value, _> = serde_json::from_str(raw_text);
 
     if result.is_err() {
-        return Line::from(raw_text);
+        return Line::from(raw_text.to_string());
     }
 
     let value = result.unwrap();
     if !value.is_object() {
-        return Line::from(raw_text);
+        return Line::from(raw_text.to_string());
     }
 
     let obj = value.as_object().unwrap();
     if !obj.contains_key("message") {
-        return Line::from(raw_text);
+        return Line::from(raw_text.to_string());
     }
 
     let mut spans = Vec::new();
@@ -355,6 +320,7 @@ fn format_value_with_colors(spans: &mut Vec<Span<'static>>, value: &Value, depth
         }
     }
 }
+
 #[cfg(test)]
 mod test {
 
@@ -387,7 +353,8 @@ mod test {
 
     #[test]
     fn test_convert_to_line() {
-        let a = convert_to_line(r#"
+        let a = convert_to_line(
+            r#"
 {
     "cold_start": true,
     "function_arn": "arn:aws:lambda:ap-northeast-1:XXXXXXXXXXXX:function:AwsAppStack-loggerE71C1604-7O0zP2rA8iBZ",
@@ -405,6 +372,7 @@ mod test {
         "key3": "value3"
     }
 }
-        "#.to_string());
+        "#,
+        );
     }
 }

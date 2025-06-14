@@ -15,6 +15,7 @@ use super::{
 };
 use crate::{
     action::{Action, ComponentAction},
+    components::log_detail::LogDetail,
     config::Config,
 };
 
@@ -43,7 +44,7 @@ impl Message {
             "https://{}.console.aws.amazon.com/cloudwatch/home?region={}#logsV2:log-groups/log-group/{}/log-events/{}",
             AWS_REGION,
             AWS_REGION,
-            urlencoding::encode(&urlencoding::encode(&log_group_id_without_account)),
+            urlencoding::encode(&urlencoding::encode(log_group_id_without_account)),
             urlencoding::encode(&urlencoding::encode(log_stream_name))
         )
     }
@@ -85,6 +86,7 @@ pub struct OuterLayout {
     cursor: Cursor,
     log_group_list: LogGroupList,
     log_stream: LogStream,
+    log_detail: LogDetail<'static>,
     stream_cancel_token: Option<CancellationToken>,
 }
 
@@ -219,6 +221,7 @@ impl Component for OuterLayout {
     fn update(&mut self, action: Action, tx: UnboundedSender<Action>) -> Result<()> {
         self.log_group_list.update(action.clone(), tx.clone())?;
         self.log_stream.update(action.clone(), tx.clone())?;
+        self.log_detail.update(action.clone(), tx.clone())?;
 
         if let Action::ComponentAction(action) = action {
             if let Some(action) = action
@@ -268,7 +271,7 @@ impl Component for OuterLayout {
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> Result<()> {
         let constraints = match self.cursor {
             Cursor::LogGroupList => vec![Constraint::Percentage(70), Constraint::Percentage(30)],
-            Cursor::LogStream => vec![Constraint::Percentage(30), Constraint::Percentage(70)],
+            Cursor::LogStream => vec![Constraint::Percentage(50), Constraint::Percentage(50)],
         };
 
         let outer_layout = Layout::default()
@@ -276,21 +279,16 @@ impl Component for OuterLayout {
             .constraints(constraints)
             .split(area);
 
-        // Log group listの高さを20に制限
-        // let left_layout = Layout::default()
-        //     .direction(Direction::Vertical)
-        //     .constraints(vec![Constraint::Length(20), Constraint::Min(0)])
-        //     .split(outer_layout[0]);
+        match self.cursor {
+            Cursor::LogGroupList => {
+                self.log_group_list.draw(frame, outer_layout[0])?;
+            }
+            Cursor::LogStream => {
+                self.log_detail.draw(frame, outer_layout[0])?;
+            }
+        }
 
-        self.log_group_list.draw(frame, outer_layout[0])?;
         self.log_stream.draw(frame, outer_layout[1])?;
         Ok(())
     }
 }
-
-/*
-
-https://ap-northeast-1.console.aws.amazon.com/cloudwatch/home?region=ap-northeast-1#logsV2:log-groups/log-group/$252Faws$252Flambda$252FAppStack-CustomCDKBucketDeployment8693BB64968944B6-GQdSBL5N4uaZ/log-events/2025$252F04$252F21$252F$255B$2524LATEST$255Dd9c069780d294516942fcf15418b401f
-https://ap-northeast-1.console.aws.amazon.com/cloudwatch/home?region=ap-northeast-1#logsV2:log-groups/log-group/153820248175%253A%252Faws%252Flambda%252FDevAppStackReservationStack8EF3E1A5-update46C5CAF0-yy7WH9VPDYs8/log-events/2025%252F03%252F12%252F%255B%2524LATEST%255Da30225cd3ef94b7a8d76d01fab306abe
-
-*/
